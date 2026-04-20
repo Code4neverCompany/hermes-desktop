@@ -33,13 +33,13 @@ function Setup({ onComplete }: { onComplete: () => void }): React.JSX.Element {
 
     try {
       if (provider.needsKey && provider.envKey) {
-        await window.hermesAPI.setEnv(provider.envKey, apiKey.trim());
+        await desktopClient.setEnv(provider.envKey, apiKey.trim());
       }
 
       const configProvider = isLocal ? "custom" : provider.configProvider;
       const configBaseUrl = isLocal ? baseUrl.trim() : provider.baseUrl;
       const configModel = modelName.trim() || "";
-      await window.hermesAPI.setModelConfig(
+      await desktopClient.setModelConfig(
         configProvider,
         configModel,
         configBaseUrl,
@@ -149,7 +149,7 @@ function Setup({ onComplete }: { onComplete: () => void }): React.JSX.Element {
 
             <button
               className="setup-link"
-              onClick={() => window.hermesAPI.openExternal(provider.url)}
+              onClick={() => desktopClient.openExternal(provider.url)}
             >
               Don&apos;t have a key? Get one here
               <ExternalLink size={12} />

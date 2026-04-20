@@ -14,10 +14,10 @@ function App(): React.JSX.Element {
   const [installError, setInstallError] = useState<string | null>(null);
   const [nextScreen, setNextScreen] = useState<Screen | null>(null);
   const [splashDone, setSplashDone] = useState(false);
-  const isMac = window.electron?.process?.platform === "darwin";
+  const isMac = desktopRuntime.platform === "darwin";
 
   const runInstallCheck = useCallback(() => {
-    window.hermesAPI
+    desktopClient
       .checkInstall()
       .then((status) => {
         if (!status.installed) {

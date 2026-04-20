@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.json",
+  "include": [
+    "src/**/*",
+    "../../src/renderer/src/**/*",
+    "../../src/shared/**/*",
+    "../../src/renderer/src/env.d.ts"
+  ],
+  "exclude": [
+    "../../src/renderer/src/**/*.test.tsx"
+  ],
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": ["../../src/renderer/src/*"]
+    }
+  }
+}

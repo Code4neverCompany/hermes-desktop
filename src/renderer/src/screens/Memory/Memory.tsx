@@ -109,10 +109,10 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
 
   const loadData = useCallback(async () => {
     const [d, provider, provs, env] = await Promise.all([
-      window.hermesAPI.readMemory(profile),
-      window.hermesAPI.getConfig("memory.provider", profile),
-      window.hermesAPI.discoverMemoryProviders(profile),
-      window.hermesAPI.getEnv(profile),
+      desktopClient.readMemory(profile),
+      desktopClient.getConfig("memory.provider", profile),
+      desktopClient.discoverMemoryProviders(profile),
+      desktopClient.getEnv(profile),
     ]);
     setData(d as MemoryData);
     setUserContent(d.user.content);
@@ -130,7 +130,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
   async function handleAddEntry(): Promise<void> {
     if (!newEntry.trim()) return;
     setError("");
-    const result = await window.hermesAPI.addMemoryEntry(
+    const result = await desktopClient.addMemoryEntry(
       newEntry.trim(),
       profile,
     );
@@ -146,7 +146,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
   async function handleSaveEdit(): Promise<void> {
     if (editingIndex === null) return;
     setError("");
-    const result = await window.hermesAPI.updateMemoryEntry(
+    const result = await desktopClient.updateMemoryEntry(
       editingIndex,
       editContent.trim(),
       profile,
@@ -161,14 +161,14 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
   }
 
   async function handleDeleteEntry(index: number): Promise<void> {
-    await window.hermesAPI.removeMemoryEntry(index, profile);
+    await desktopClient.removeMemoryEntry(index, profile);
     setConfirmDelete(null);
     await loadData();
   }
 
   async function handleSaveUserProfile(): Promise<void> {
     setError("");
-    const result = await window.hermesAPI.writeUserProfile(
+    const result = await desktopClient.writeUserProfile(
       userContent,
       profile,
     );
@@ -503,7 +503,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
                         className="btn-ghost"
                         style={{ padding: 2, opacity: 0.6 }}
                         onClick={() =>
-                          window.hermesAPI.openExternal(PROVIDER_URLS[p.name])
+                          desktopClient.openExternal(PROVIDER_URLS[p.name])
                         }
                         title="Open provider website"
                       >
@@ -543,7 +543,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
                               }))
                             }
                             onBlur={async () => {
-                              await window.hermesAPI.setEnv(
+                              await desktopClient.setEnv(
                                 envKey,
                                 providerEnv[envKey] || "",
                                 profile,
@@ -565,7 +565,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
                         className="btn btn-secondary btn-sm"
                         onClick={async () => {
                           setActivating(p.name);
-                          await window.hermesAPI.setConfig(
+                          await desktopClient.setConfig(
                             "memory.provider",
                             "",
                             profile,
@@ -585,7 +585,7 @@ function Memory({ profile }: { profile?: string }): React.JSX.Element {
                         className="btn btn-primary btn-sm"
                         onClick={async () => {
                           setActivating(p.name);
-                          await window.hermesAPI.setConfig(
+                          await desktopClient.setConfig(
                             "memory.provider",
                             p.name,
                             profile,

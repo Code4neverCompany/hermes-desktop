@@ -17,6 +17,7 @@ interface SetupProgress {
 }
 
 function Office({ visible }: { visible?: boolean }): React.JSX.Element {
+  const usesEmbeddedOffice = desktopRuntime.officeEmbedding === "embedded";
   const [state, setState] = useState<OfficeState>("checking");
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -50,7 +51,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
 
   const checkStatus = useCallback(async (): Promise<void> => {
     setState("checking");
-    const status = await window.hermesAPI.claw3dStatus();
+    const status = await desktopClient.claw3dStatus();
     setRunning(status.running);
     setPort(status.port);
     setPortInput(String(status.port));
@@ -72,7 +73,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
   useEffect(() => {
     if (state !== "ready" || !visible) return;
     const interval = setInterval(async () => {
-      const status = await window.hermesAPI.claw3dStatus();
+      const status = await desktopClient.claw3dStatus();
       setRunning(status.running);
       setPort(status.port);
       setPortInUse(status.portInUse);
@@ -99,6 +100,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
 
   // Webview load/error handling
   useEffect(() => {
+    if (!usesEmbeddedOffice) return;
     const wv = webviewRef.current as unknown as {
       addEventListener: (e: string, fn: (evt?: unknown) => void) => void;
       removeEventListener: (e: string, fn: (evt?: unknown) => void) => void;
@@ -129,18 +131,18 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
       wv.removeEventListener("did-finish-load", onLoad);
       wv.removeEventListener("did-fail-load", onFail);
     };
-  }, [running, port]);
+  }, [running, port, usesEmbeddedOffice]);
 
   async function handleInstall(): Promise<void> {
     setState("installing");
     setError("");
 
-    const cleanup = window.hermesAPI.onClaw3dSetupProgress((p) => {
+    const cleanup = desktopClient.onClaw3dSetupProgress((p) => {
       setProgress(p);
     });
 
     try {
-      const result = await window.hermesAPI.claw3dSetup();
+      const result = await desktopClient.claw3dSetup();
       cleanup();
       if (result.success) {
         setState("ready");
@@ -157,7 +159,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
 
   async function handleStartStop(): Promise<void> {
     if (running) {
-      await window.hermesAPI.claw3dStopAll();
+      await desktopClient.claw3dStopAll();
       setRunning(false);
       setWebviewReady(false);
       setWebviewError("");
@@ -166,7 +168,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
       setError("");
       setWebviewError("");
       setStarting(true);
-      const result = await window.hermesAPI.claw3dStartAll();
+      const result = await desktopClient.claw3dStartAll();
       if (!result.success) {
         setError(result.error || "Failed to start Claw3D");
         setStarting(false);
@@ -182,28 +184,37 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
   async function handlePortSave(): Promise<void> {
     const newPort = parseInt(portInput, 10);
     if (isNaN(newPort) || newPort < 1024 || newPort > 65535) return;
-    await window.hermesAPI.claw3dSetPort(newPort);
+    await desktopClient.claw3dSetPort(newPort);
     setPort(newPort);
-    const status = await window.hermesAPI.claw3dStatus();
+    const status = await desktopClient.claw3dStatus();
     setPortInUse(status.portInUse);
   }
 
   async function handleWsUrlSave(): Promise<void> {
     const trimmed = wsUrlInput.trim();
     if (!trimmed) return;
-    await window.hermesAPI.claw3dSetWsUrl(trimmed);
+    await desktopClient.claw3dSetWsUrl(trimmed);
   }
 
   async function loadLogs(): Promise<void> {
-    const l = await window.hermesAPI.claw3dGetLogs();
+    const l = await desktopClient.claw3dGetLogs();
     setLogs(l);
     setShowLogs(true);
   }
 
   function refreshWebview(): void {
+    if (!usesEmbeddedOffice) return;
     setWebviewError("");
     const wv = webviewRef.current as unknown as { reload?: () => void };
     if (wv?.reload) wv.reload();
+  }
+
+  async function openOfficeWindow(): Promise<void> {
+    if (desktopClient.openOfficeWindow) {
+      await desktopClient.openOfficeWindow(claw3dUrl);
+      return;
+    }
+    await desktopClient.openExternal(claw3dUrl);
   }
 
   const percent =
@@ -251,7 +262,7 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
               <button
                 className="btn btn-secondary"
                 onClick={() =>
-                  window.hermesAPI.openExternal(
+                  desktopClient.openExternal(
                     "https://github.com/iamlukethedev/Claw3D",
                   )
                 }
@@ -319,16 +330,27 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
           </button>
           {running && (
             <>
+              {usesEmbeddedOffice && (
+                <button
+                  className="btn-ghost office-toolbar-btn"
+                  onClick={refreshWebview}
+                  title="Refresh"
+                >
+                  <Refresh size={16} />
+                </button>
+              )}
+              {!usesEmbeddedOffice && (
+                <button
+                  className="btn-ghost office-toolbar-btn"
+                  onClick={() => void openOfficeWindow()}
+                  title="Open Office window"
+                >
+                  <Refresh size={16} />
+                </button>
+              )}
               <button
                 className="btn-ghost office-toolbar-btn"
-                onClick={refreshWebview}
-                title="Refresh"
-              >
-                <Refresh size={16} />
-              </button>
-              <button
-                className="btn-ghost office-toolbar-btn"
-                onClick={() => window.hermesAPI.openExternal(claw3dUrl)}
+                onClick={() => desktopClient.openExternal(claw3dUrl)}
                 title="Open in browser"
               >
                 <ExternalLink size={16} />
@@ -423,46 +445,75 @@ function Office({ visible }: { visible?: boolean }): React.JSX.Element {
       <div className="office-content">
         {running && !showLogs ? (
           <>
-            {(!webviewReady || webviewError) && (
-              <div className="office-loading-overlay">
-                {webviewError ? (
-                  <div className="office-webview-error">
-                    <p className="office-webview-error-title">
-                      Could not load Claw3D
-                    </p>
-                    <p className="office-muted">{webviewError}</p>
-                    <div className="office-webview-error-actions">
-                      <button
-                        className="btn btn-primary btn-sm"
-                        onClick={refreshWebview}
-                      >
-                        Retry
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={loadLogs}
-                      >
-                        View Logs
-                      </button>
-                    </div>
+            {usesEmbeddedOffice ? (
+              <>
+                {(!webviewReady || webviewError) && (
+                  <div className="office-loading-overlay">
+                    {webviewError ? (
+                      <div className="office-webview-error">
+                        <p className="office-webview-error-title">
+                          Could not load Claw3D
+                        </p>
+                        <p className="office-muted">{webviewError}</p>
+                        <div className="office-webview-error-actions">
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={refreshWebview}
+                          >
+                            Retry
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={loadLogs}
+                          >
+                            View Logs
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="office-spinner" />
+                        <p className="office-muted">
+                          {starting
+                            ? "Starting Claw3D services..."
+                            : "Loading Claw3D..."}
+                        </p>
+                      </>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <div className="office-spinner" />
-                    <p className="office-muted">
-                      {starting
-                        ? "Starting Claw3D services..."
-                        : "Loading Claw3D..."}
-                    </p>
-                  </>
                 )}
+                <webview
+                  ref={webviewRef as React.RefObject<HTMLWebViewElement>}
+                  src={claw3dUrl}
+                  style={{ width: "100%", height: "100%", border: "none" }}
+                />
+              </>
+            ) : (
+              <div className="office-center">
+                <div className="office-setup-card">
+                  <h2 className="office-setup-title">Office is running</h2>
+                  <p className="office-setup-desc">
+                    This desktop shell opens Claw3D in a dedicated Office window
+                    instead of embedding it inside the main app.
+                  </p>
+                  <div className="office-setup-actions">
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => void openOfficeWindow()}
+                    >
+                      Open Office Window
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => desktopClient.openExternal(claw3dUrl)}
+                    >
+                      <ExternalLink size={14} />
+                      Open in Browser
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
-            <webview
-              ref={webviewRef as React.RefObject<HTMLWebViewElement>}
-              src={claw3dUrl}
-              style={{ width: "100%", height: "100%", border: "none" }}
-            />
           </>
         ) : !showLogs ? (
           <div className="office-center">

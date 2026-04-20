@@ -100,11 +100,11 @@ function Settings({
   const loadConfig = useCallback(async (): Promise<void> => {
     // Load fast config first (cached in main process)
     const [envData, home, mc, pool, aVersion] = await Promise.all([
-      window.hermesAPI.getEnv(profile),
-      window.hermesAPI.getHermesHome(profile),
-      window.hermesAPI.getModelConfig(profile),
-      window.hermesAPI.getCredentialPool(),
-      window.hermesAPI.getAppVersion(),
+      desktopClient.getEnv(profile),
+      desktopClient.getHermesHome(profile),
+      desktopClient.getModelConfig(profile),
+      desktopClient.getCredentialPool(),
+      desktopClient.getAppVersion(),
     ]);
     setEnv(envData);
     setHermesHome(home);
@@ -120,15 +120,15 @@ function Settings({
     });
 
     // Load network settings from config.yaml
-    window.hermesAPI.getConfig("network.force_ipv4", profile).then((v) => {
+    desktopClient.getConfig("network.force_ipv4", profile).then((v) => {
       setForceIpv4(v === "true" || v === "True");
     });
-    window.hermesAPI.getConfig("network.proxy", profile).then((v) => {
+    desktopClient.getConfig("network.proxy", profile).then((v) => {
       setHttpProxy(v || "");
     });
 
     // Defer slow calls — background refresh, cached values show instantly
-    window.hermesAPI.getHermesVersion().then((v) => {
+    desktopClient.getHermesVersion().then((v) => {
       setHermesVersion(v);
       if (v) {
         try {
@@ -140,7 +140,7 @@ function Settings({
     });
 
     if (localStorage.getItem("hermes-openclaw-dismissed") !== "true") {
-      window.hermesAPI.checkOpenClaw().then((claw) => {
+      desktopClient.checkOpenClaw().then((claw) => {
         setOpenclawFound(claw.found);
         setOpenclawPath(claw.path);
         try {
@@ -161,7 +161,7 @@ function Settings({
   useEffect(() => {
     if (!visible) return;
     (async (): Promise<void> => {
-      const mc = await window.hermesAPI.getModelConfig(profile);
+      const mc = await desktopClient.getModelConfig(profile);
       modelLoaded.current = false;
       setModelProvider(mc.provider);
       setModelName(mc.model);
@@ -175,7 +175,7 @@ function Settings({
   // Auto-save model config when values change (debounced)
   const saveModelConfig = useCallback(async () => {
     if (!modelLoaded.current) return;
-    await window.hermesAPI.setModelConfig(
+    await desktopClient.setModelConfig(
       modelProvider,
       modelName,
       modelBaseUrl,
@@ -184,7 +184,7 @@ function Settings({
     // Auto-save to models library (dedup handled by backend)
     if (modelName.trim()) {
       const displayName = modelName.split("/").pop() || modelName;
-      await window.hermesAPI.addModel(
+      await desktopClient.addModel(
         displayName,
         modelProvider,
         modelName,
@@ -208,7 +208,7 @@ function Settings({
 
   async function handleBlur(key: string): Promise<void> {
     const value = env[key] || "";
-    await window.hermesAPI.setEnv(key, value, profile);
+    await desktopClient.setEnv(key, value, profile);
     setSavedKey(key);
     setTimeout(() => setSavedKey(null), 2000);
   }
@@ -227,7 +227,7 @@ function Settings({
         label: poolNewLabel.trim() || `Key ${existing.length + 1}`,
       },
     ];
-    await window.hermesAPI.setCredentialPool(poolProvider, entries);
+    await desktopClient.setCredentialPool(poolProvider, entries);
     setCredPool((prev) => ({ ...prev, [poolProvider]: entries }));
     setPoolNewKey("");
     setPoolNewLabel("");
@@ -239,7 +239,7 @@ function Settings({
   ): Promise<void> {
     const entries = [...(credPool[provider] || [])];
     entries.splice(index, 1);
-    await window.hermesAPI.setCredentialPool(provider, entries);
+    await desktopClient.setCredentialPool(provider, entries);
     setCredPool((prev) => ({ ...prev, [provider]: entries }));
   }
 
@@ -257,12 +257,12 @@ function Settings({
     setMigrationLog("");
     setMigrationResult(null);
 
-    const cleanup = window.hermesAPI.onInstallProgress((p) => {
+    const cleanup = desktopClient.onInstallProgress((p) => {
       setMigrationLog(p.log);
     });
 
     try {
-      const result = await window.hermesAPI.runClawMigrate();
+      const result = await desktopClient.runClawMigrate();
       cleanup();
       if (result.success) {
         setMigrationResult(
@@ -287,7 +287,7 @@ function Settings({
   async function handleBackup(): Promise<void> {
     setBackingUp(true);
     setBackupResult(null);
-    const result = await window.hermesAPI.runHermesBackup(profile);
+    const result = await desktopClient.runHermesBackup(profile);
     setBackingUp(false);
     if (result.success) {
       setBackupResult(`Backup created: ${result.path || "success"}`);
@@ -308,7 +308,7 @@ function Settings({
       setImportResult(null);
       // Electron extends File with a `path` property (full filesystem path)
       const filePath = (file as File & { path: string }).path;
-      const result = await window.hermesAPI.runHermesImport(filePath, profile);
+      const result = await desktopClient.runHermesImport(filePath, profile);
       setImporting(false);
       if (result.success) {
         setImportResult("Import complete! Restart the app to apply changes.");
@@ -320,7 +320,7 @@ function Settings({
   }
 
   async function loadLogs(): Promise<void> {
-    const result = await window.hermesAPI.readLogs(logFile, 300);
+    const result = await desktopClient.readLogs(logFile, 300);
     setLogContent(result.content);
     setLogPath(result.path);
   }
@@ -328,14 +328,14 @@ function Settings({
   async function handleDoctor(): Promise<void> {
     setDoctorRunning(true);
     setDoctorOutput(null);
-    const output = await window.hermesAPI.runHermesDoctor();
+    const output = await desktopClient.runHermesDoctor();
     setDoctorOutput(output);
     setDoctorRunning(false);
   }
 
   // Helper to fetch fresh version, clear backend cache, and update localStorage
   function refreshVersion(): void {
-    window.hermesAPI.refreshHermesVersion().then((v) => {
+    desktopClient.refreshHermesVersion().then((v) => {
       setHermesVersion(v);
       if (v) {
         try {
@@ -350,7 +350,7 @@ function Settings({
   async function handleUpdateHermes(): Promise<void> {
     setUpdating(true);
     setUpdateResult(null);
-    const result = await window.hermesAPI.runHermesUpdate();
+    const result = await desktopClient.runHermesUpdate();
     setUpdating(false);
     if (result.success) {
       setUpdateResult("Updated successfully!");
@@ -473,7 +473,7 @@ function Settings({
               onClick={async () => {
                 setDumpRunning(true);
                 setDumpOutput(null);
-                const output = await window.hermesAPI.runHermesDump();
+                const output = await desktopClient.runHermesDump();
                 setDumpOutput(output);
                 setDumpRunning(false);
               }}
@@ -591,7 +591,7 @@ function Settings({
                 onChange={async (e) => {
                   const val = e.target.checked;
                   setForceIpv4(val);
-                  await window.hermesAPI.setConfig(
+                  await desktopClient.setConfig(
                     "network.force_ipv4",
                     val ? "true" : "false",
                     profile,
@@ -615,7 +615,7 @@ function Settings({
             value={httpProxy}
             onChange={(e) => setHttpProxy(e.target.value)}
             onBlur={async () => {
-              await window.hermesAPI.setConfig(
+              await desktopClient.setConfig(
                 "network.proxy",
                 httpProxy.trim(),
                 profile,
@@ -849,7 +849,7 @@ function Settings({
                   className={`btn btn-sm ${logFile === f ? "btn-primary" : "btn-secondary"}`}
                   onClick={() => {
                     setLogFile(f);
-                    window.hermesAPI.readLogs(f, 300).then((r) => {
+                    desktopClient.readLogs(f, 300).then((r) => {
                       setLogContent(r.content);
                       setLogPath(r.path);
                     });
