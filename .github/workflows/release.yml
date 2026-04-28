@@ -115,9 +115,42 @@ jobs:
             dist/*.deb
             dist/latest-linux.yml
 
+  release_windows:
+    name: Build Windows
+    needs: prepare
+    if: needs.prepare.outputs.tag_exists == 'false'
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package Windows artifacts
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            dist/*.exe
+            dist/*.nupkg
+            dist/*.zip
+
   publish:
     name: Publish Release
-    needs: [prepare, release_mac, release_linux]
+    needs: [prepare, release_mac, release_linux, release_windows]
     if: needs.prepare.outputs.tag_exists == 'false'
     runs-on: ubuntu-latest
     steps:
